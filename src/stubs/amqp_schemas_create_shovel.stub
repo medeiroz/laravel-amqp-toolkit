@@ -1,0 +1,32 @@
+<?php
+
+
+use Medeiroz\AmqpToolkit\SchemaMigration\SchemaMigration;
+
+return new class extends SchemaMigration
+{
+    private const NAME = '{{ name }}';
+
+    public function up(): void
+    {
+        $this->createShovel(
+            name: self::NAME,
+            source: new Resource0dot9(
+                type: 'queue',
+                uri: 'amqp://',
+                queue: 'my-queue-on-amqp-0-9',
+                autoDelete: 'never',
+                addForwardingHeaders: 'No',
+            ),
+            destination: new Resource1dot0(
+                uri: 'amqps://user:password@my-host.servicebus.windows.net:5671/?verify=verify_none',
+                address: 'my-topic-on-service-bus',
+            ),
+        );
+    }
+
+    public function down(): void
+    {
+        $this->deleteShovel(self::NAME);
+    }
+};

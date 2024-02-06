@@ -1,0 +1,24 @@
+<?php
+
+
+use Medeiroz\AmqpToolkit\SchemaMigration\SchemaMigration;
+
+return new class extends SchemaMigration
+{
+    private const NAME = '{{ name }}';
+
+    public function up(): void
+    {
+        $this->createQueue(self::NAME)
+            ->withRetry()
+            ->withTtl(seconds: 5)
+            ->withDql();
+    }
+
+    public function down(): void
+    {
+        $this->deleteQueue(self::NAME);
+        $this->deleteQueue(self::NAME . '.retry');
+        $this->deleteQueue(self::NAME . '.dql');
+    }
+};

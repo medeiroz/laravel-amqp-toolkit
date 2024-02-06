@@ -1,0 +1,19 @@
+<?php
+
+
+use Medeiroz\AmqpToolkit\SchemaMigration\SchemaMigration;
+
+return new class extends SchemaMigration
+{
+    private const NAME = '{{ name }}';
+
+    public function up(): void
+    {
+        $this->createExchange(self::NAME);
+    }
+
+    public function down(): void
+    {
+        $this->deleteExchange(self::NAME);
+    }
+};
