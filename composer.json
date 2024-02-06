@@ -34,6 +34,7 @@
         "spatie/laravel-package-tools": "^1.14.0"
     },
     "require-dev": {
+        "ext-pcov": "*",
         "larastan/larastan": "^2.8.1",
         "laravel/pint": "^1.13",
         "nunomaduro/collision": "^7.10",
