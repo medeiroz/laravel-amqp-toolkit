@@ -3,8 +3,8 @@
 namespace Medeiroz\AmqpToolkit\Tests;
 
 use Illuminate\Database\Eloquent\Factories\Factory;
-use Orchestra\Testbench\TestCase as Orchestra;
 use Medeiroz\AmqpToolkit\AmqpToolkitServiceProvider;
+use Orchestra\Testbench\TestCase as Orchestra;
 
 class TestCase extends Orchestra
 {
