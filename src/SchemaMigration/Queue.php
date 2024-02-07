@@ -39,9 +39,11 @@ class Queue implements SchemaBlueprintInterface
         return $this;
     }
 
-    public function bind(string $exchange): void
+    public function bind(string $exchange): self
     {
         $this->exchange = $exchange;
+
+        return $this;
     }
 
     public function run(AmqpClient $client): void
