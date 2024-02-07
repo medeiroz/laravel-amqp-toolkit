@@ -78,6 +78,10 @@ class Queue implements SchemaBlueprintInterface
             : [];
 
         $client->createQueue($this->name, $arguments);
+
+        if ($this->exchange) {
+            $client->bind($this->name, $this->exchange);
+        }
     }
 
     public function runDelete(AmqpClient $client): void
