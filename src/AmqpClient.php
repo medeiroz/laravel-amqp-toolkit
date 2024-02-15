@@ -27,9 +27,10 @@ class AmqpClient
 
     public function connect(): void
     {
-        if ($this->connection) {
+        if ($this->connection && $this->connection->isConnected() && $this->channel && $this->channel->is_open()) {
             return;
         }
+
         $this->logger->debug('Connecting AMQP server...');
 
         $config = new AMQPConnectionConfig;

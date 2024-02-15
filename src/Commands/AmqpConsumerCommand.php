@@ -17,24 +17,32 @@ class AmqpConsumerCommand extends Command
 
     protected $description = 'Start a amqp consumer for a queue';
 
-    protected AmqpClient $client;
-
-    public function handle(AmqpClient $client): void
+    public function __construct(protected AmqpClient $client)
     {
-        $this->client = $client;
+        parent::__construct();
+    }
 
-        $this->getClient()->consume(
-            queue: $this->getQueue(),
-            callback: function (AMQPMessage $message) {
-                try {
-                    $body = $this->parseBody($message);
-                    $this->process($body);
-                    $this->accept($message);
-                } catch (Throwable $exception) {
-                    $this->reject($message, $exception);
-                }
-            }
+    public function handle(): void
+    {
+        retry(
+            times: (int) $this->getClient()->getSetting('max-attempts'),
+            callback: fn () => $this->getClient()->consume(
+                queue: $this->getQueue(),
+                callback: fn (AMQPMessage $message) => $this->processCallback($message),
+            ),
+            sleepMilliseconds: 1000,
         );
+    }
+
+    public function processCallback(AMQPMessage $message): void
+    {
+        try {
+            $body = $this->parseBody($message);
+            $this->process($body);
+            $this->accept($message);
+        } catch (Throwable $exception) {
+            $this->reject($message, $exception);
+        }
     }
 
     public function getQueue(): string
