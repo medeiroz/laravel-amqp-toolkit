@@ -39,6 +39,8 @@ class AmqpClient
         $config->setUser($this->getSetting('user'));
         $config->setPassword($this->getSetting('password'));
         $config->setVhost($this->getSetting('vhost'));
+        $config->setHeartbeat((int) $this->getSetting('heartbeat'));
+        $config->setKeepalive((bool) $this->getSetting('keepalive'));
 
         $this->connection = $this->amqpConnectionFactory->create($config);
         $this->channel = $this->connection->channel();

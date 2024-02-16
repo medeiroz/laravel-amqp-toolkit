@@ -5,6 +5,8 @@ return [
     'schemas' => base_path('amqp-toolkit-schemas'),
     'table_name' => env('AMQP_TABLE_NAME', 'amqp_schemas'),
     'max-attempts' => env('AMQP_MAX_ATTEMPTS', 10),
+    'heartbeat' => env('AMQP_HEARTBEAT', 30),
+    'keepalive' => env('AMQP_KEEPALIVE', true),
 
     /**
      * The default connection to use when no connection is provided to the AMQP client.
