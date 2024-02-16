@@ -24,14 +24,27 @@ class AmqpConsumerCommand extends Command
 
     public function handle(): void
     {
-        retry(
-            times: (int) $this->getClient()->getSetting('max-attempts'),
-            callback: fn () => $this->getClient()->consume(
-                queue: $this->getQueue(),
-                callback: fn (AMQPMessage $message) => $this->processCallback($message),
-            ),
-            sleepMilliseconds: 1000,
-        );
+        $this->components->info(sprintf('Starting consume queue %s ...', $this->getQueue()));
+
+        try {
+            retry(
+                times: (int) $this->getClient()->getSetting('max-attempts'),
+                callback: fn () => $this->getClient()->consume(
+                    queue: $this->getQueue(),
+                    callback: fn (AMQPMessage $message) => $this->processCallback($message),
+                ),
+                sleepMilliseconds: function (int $attempts) {
+                    $this->components->warn(sprintf('Consumer failed. Retrying attempt %u ...', $attempts));
+
+                    return $attempts * 500;
+                },
+            );
+        } catch (Throwable $exception) {
+            $this->components->error('Consumer failed.');
+            throw $exception;
+        }
+
+        $this->components->info('Consumer finished.');
     }
 
     public function processCallback(AMQPMessage $message): void
@@ -40,8 +53,25 @@ class AmqpConsumerCommand extends Command
             $body = $this->parseBody($message);
             $this->process($body);
             $this->accept($message);
+            $this->components->info(
+                sprintf(
+                    'Queue: %s | MessageID: %u | %s',
+                    $this->getQueue(),
+                    $message->getDeliveryTag(),
+                    'Message accepted.',
+                )
+            );
         } catch (Throwable $exception) {
             $this->reject($message, $exception);
+            $this->components->error(
+                sprintf(
+                    'Queue: %s | MessageID: %u | %s | Exception: %s',
+                    $this->getQueue(),
+                    $message->getDeliveryTag(),
+                    'Message rejected.',
+                    $exception->getMessage(),
+                )
+            );
         }
     }
 
