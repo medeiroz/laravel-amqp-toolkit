@@ -13,6 +13,8 @@ uses()->group('amqp')->beforeEach(function () {
         'schemas' => '/app/amqp-toolkit-schemas',
         'table_name' => 'amqp_schemas',
         'max-attempts' => 10,
+        'heartbeat' => 30,
+        'keepalive' => true,
         'connection' => 'rabbitmq',
         'logging-channel' => 'stderr',
         'connections' => [
