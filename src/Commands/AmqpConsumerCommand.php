@@ -62,6 +62,7 @@ class AmqpConsumerCommand extends Command
                 )
             );
         } catch (Throwable $exception) {
+            report($exception);
             $this->reject($message, $exception);
             $this->components->error(
                 sprintf(
