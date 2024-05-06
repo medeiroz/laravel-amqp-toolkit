@@ -61,8 +61,14 @@ This is the content of the published configuration file:
 ```php
 return [
     'schemas' => base_path('amqp-toolkit-schemas'),
-    'table_name' => 'amqp_schemas',
+    'table_name' => env('AMQP_TABLE_NAME', 'amqp_schemas'),
     'max-attempts' => env('AMQP_MAX_ATTEMPTS', 10),
+    'heartbeat' => env('AMQP_HEARTBEAT', 30),
+    'keepalive' => env('AMQP_KEEPALIVE', true),
+
+    /**
+     * The default connection to use when no connection is provided to the AMQP client.
+     */
     'connection' => env('AMQP_CONNECTION', 'rabbitmq'),
 
     /**
