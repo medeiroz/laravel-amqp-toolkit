@@ -12,8 +12,7 @@ class SchemaDbRepository
     public function __construct(
         private Resolver $resolver,
         private string $table,
-    ) {
-    }
+    ) {}
 
     public function list(): Collection
     {
@@ -28,12 +27,11 @@ class SchemaDbRepository
             ->max('batch');
     }
 
-    public function create(string $schema): void
+    public function create(string $schema, int $batchId = 1): void
     {
-        $batch = $this->getLatestBatch() + 1;
         $this->builder()->insert([
             'schema' => $schema,
-            'batch' => $batch,
+            'batch' => $batchId,
             'migrated_at' => now()->format('Y-m-d H:i:s'),
         ]);
     }

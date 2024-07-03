@@ -12,8 +12,7 @@ class AmqpPublisher
 {
     public function __construct(
         private AmqpClient $client,
-    ) {
-    }
+    ) {}
 
     public function onExchange(mixed $message, string $exchange, ?string $routeKey = ''): void
     {

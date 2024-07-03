@@ -13,8 +13,7 @@ class Bind implements SchemaBlueprintInterface
         public string $queue,
         public string $exchange,
         public string $routingKey = '',
-    ) {
-    }
+    ) {}
 
     public function run(AmqpClient $client): void
     {

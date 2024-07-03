@@ -12,13 +12,13 @@ return new class extends SchemaMigration
         $this->createQueue(self::NAME)
             ->withRetry()
             ->withTtl(seconds: 5)
-            ->withDql();
+            ->withDlq();
     }
 
     public function down(): void
     {
         $this->deleteQueue(self::NAME);
         $this->deleteQueue(self::NAME . '.retry');
-        $this->deleteQueue(self::NAME . '.dql');
+        $this->deleteQueue(self::NAME . '.dlq');
     }
 };

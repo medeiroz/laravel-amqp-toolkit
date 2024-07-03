@@ -18,17 +18,17 @@ class Runner
         private SchemaDbRepository $schemaDbRepository,
         private ConsoleOutput $output,
 
-    ) {
-    }
+    ) {}
 
     public function migrate(): void
     {
         $filesToMigrate = $this->getFilesToMigrate();
+        $batchId = $this->schemaDbRepository->getLatestBatch() + 1;
 
-        $filesToMigrate->each(function (array $file) {
+        $filesToMigrate->each(function (array $file) use ($batchId) {
             $schemaMigration = require $file['path'];
             $this->migrateSchemaUp($schemaMigration, $file);
-            $this->schemaDbRepository->create($file['name']);
+            $this->schemaDbRepository->create($file['name'], $batchId);
         });
     }
 
@@ -59,7 +59,7 @@ class Runner
             $schemaMigration->up();
             $this->runStack($schemaMigration->getStack());
 
-            $this->output->writeln("Migration: {$file['name']} successed");
+            $this->output->writeln("Migration: {$file['name']} successes");
         } catch (Throwable $exception) {
             $this->output->writeln("Migration: {$file['name']} failed");
             throw $exception;

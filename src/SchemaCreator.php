@@ -14,8 +14,7 @@ class SchemaCreator
     public function __construct(
         protected Filesystem $files,
         protected string $customStubPath,
-    ) {
-    }
+    ) {}
 
     public function create(string $type, string $name, string $path): string
     {

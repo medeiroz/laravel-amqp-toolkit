@@ -13,8 +13,7 @@ class Exchange implements SchemaBlueprintInterface
         public string $action,
         public string $name,
         public ExchangesTypes $type = ExchangesTypes::FANOUT,
-    ) {
-    }
+    ) {}
 
     public function run(AmqpClient $client): void
     {
