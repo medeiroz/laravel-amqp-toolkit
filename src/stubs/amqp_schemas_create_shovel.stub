@@ -2,6 +2,8 @@
 
 
 use Medeiroz\AmqpToolkit\SchemaMigration\SchemaMigration;
+use Medeiroz\AmqpToolkit\SchemaMigration\Shovel\Resource0dot9;
+use Medeiroz\AmqpToolkit\SchemaMigration\Shovel\Resource1dot0;
 
 return new class extends SchemaMigration
 {

@@ -13,9 +13,7 @@ class Resource0dot9 implements ResourceInterface
         public int $prefetchCount = 1000,
         public string $autoDelete = 'never',
         public bool $addForwardingHeaders = false,
-    ) {
-
-    }
+    ) {}
 
     public function getProtocol(): string
     {

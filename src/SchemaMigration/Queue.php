@@ -13,10 +13,9 @@ class Queue implements SchemaBlueprintInterface
         public string $name,
         public bool $retry = false,
         public int $ttl = 60000, // 60 seconds
-        public bool $dql = false,
+        public bool $dlq = false,
         public ?string $exchange = null,
-    ) {
-    }
+    ) {}
 
     public function withRetry(bool $retry = true): self
     {
@@ -32,9 +31,9 @@ class Queue implements SchemaBlueprintInterface
         return $this;
     }
 
-    public function withDql(bool $withDql = true): self
+    public function withDlq(bool $withDlq = true): self
     {
-        $this->dql = $withDql;
+        $this->dlq = $withDlq;
 
         return $this;
     }
@@ -66,8 +65,8 @@ class Queue implements SchemaBlueprintInterface
             $client->createQueue($this->name.'.retry', $arguments);
         }
 
-        if ($this->dql) {
-            $client->createQueue($this->name.'.dql');
+        if ($this->dlq) {
+            $client->createQueue($this->name.'.dlq');
         }
 
         $arguments = ($this->retry)
@@ -90,8 +89,8 @@ class Queue implements SchemaBlueprintInterface
             $client->deleteQueue($this->name.'.retry');
         }
 
-        if ($this->dql) {
-            $client->deleteQueue($this->name.'.dql');
+        if ($this->dlq) {
+            $client->deleteQueue($this->name.'.dlq');
         }
 
         $client->deleteQueue($this->name);

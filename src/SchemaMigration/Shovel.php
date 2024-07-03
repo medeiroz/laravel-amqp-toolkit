@@ -19,8 +19,7 @@ class Shovel implements SchemaBlueprintInterface
         public ?ResourceInterface $destination = null,
         public int $reconnectDelaySeconds = 1,
         public string $acknowledgementMode = 'on-confirm', // on-confirm / on-publish / no-ack
-    ) {
-    }
+    ) {}
 
     public function run(AmqpClient $client): void
     {

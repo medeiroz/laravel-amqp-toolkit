@@ -22,8 +22,7 @@ class AmqpClient
         protected AMQPConnectionFactory $amqpConnectionFactory,
         protected LoggerInterface $logger,
         protected array $settings,
-    ) {
-    }
+    ) {}
 
     public function connect(): void
     {

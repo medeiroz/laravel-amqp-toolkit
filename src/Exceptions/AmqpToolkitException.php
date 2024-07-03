@@ -4,6 +4,4 @@ namespace Medeiroz\AmqpToolkit\Exceptions;
 
 use Exception;
 
-class AmqpToolkitException extends Exception
-{
-}
+class AmqpToolkitException extends Exception {}

@@ -13,6 +13,5 @@ class AmqpReceivedMessageEvent
     public function __construct(
         public string $queue,
         public array $messageBody,
-    ) {
-    }
+    ) {}
 }
