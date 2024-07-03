@@ -4,6 +4,14 @@ All notable changes to `laravel-amqp-toolkit` will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
+## 1.0.9 - 2024-07-03
+
+### What's Changed
+
+* Added laravel 11 by @medeiroz in https://github.com/medeiroz/laravel-amqp-toolkit/pull/11
+
+**Full Changelog**: https://github.com/medeiroz/laravel-amqp-toolkit/compare/1.0.8...1.0.9
+
 ## 1.0.8 - 2024-07-03
 
 ### What's Changed
