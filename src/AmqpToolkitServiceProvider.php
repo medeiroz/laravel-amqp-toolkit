@@ -60,4 +60,16 @@ class AmqpToolkitServiceProvider extends PackageServiceProvider
             ),
         );
     }
+
+    public function packageBooted()
+    {
+        $queues = $this->app['config']['amqp-toolkit']['consumer-queues'] ?? [];
+
+        foreach ($queues as $queue => $listener) {
+            Event::listen(
+                sprintf('amqp:%s', $queue),
+                $listener,
+            );
+        }
+    }
 }
