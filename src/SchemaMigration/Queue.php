@@ -5,9 +5,12 @@ namespace Medeiroz\AmqpToolkit\SchemaMigration;
 use InvalidArgumentException;
 use Medeiroz\AmqpToolkit\AmqpClient;
 use Medeiroz\AmqpToolkit\SchemaMigration\Contracts\SchemaBlueprintInterface;
+use Medeiroz\AmqpToolkit\SchemaMigration\Contracts\WithAmqpClientInterface;
 
-class Queue implements SchemaBlueprintInterface
+class Queue implements SchemaBlueprintInterface, WithAmqpClientInterface
 {
+    private ?AmqpClient $amqpClient = null;
+
     public function __construct(
         public string $action,
         public string $name,
@@ -15,7 +18,31 @@ class Queue implements SchemaBlueprintInterface
         public int $ttl = 60000, // 60 seconds
         public bool $dlq = false,
         public ?string $exchange = null,
+        public ?string $routeKey = null,
     ) {}
+
+    public function run(): void
+    {
+        match ($this->action) {
+            'create' => $this->runCreate(),
+            'create-if-non-exists' => $this->runCreateIfNonExists(),
+            'delete' => $this->runDelete(),
+            'delete-if-exists' => $this->runDeleteIfExists(),
+            default => throw new InvalidArgumentException("Invalid action: $this->action"),
+        };
+    }
+
+    public function setAmqpClient(AmqpClient $amqpClient): self
+    {
+        $this->amqpClient = $amqpClient;
+
+        return $this;
+    }
+
+    public function getAmqpClient(): AmqpClient
+    {
+        return $this->amqpClient;
+    }
 
     public function withRetry(bool $retry = true): self
     {
@@ -38,23 +65,15 @@ class Queue implements SchemaBlueprintInterface
         return $this;
     }
 
-    public function bind(string $exchange): self
+    public function bind(string $exchange, ?string $routeKey = null): self
     {
         $this->exchange = $exchange;
+        $this->routeKey = $routeKey;
 
         return $this;
     }
 
-    public function run(AmqpClient $client): void
-    {
-        match ($this->action) {
-            'create' => $this->runCreate($client),
-            'delete' => $this->runDelete($client),
-            default => throw new InvalidArgumentException("Invalid action: {$this->action}"),
-        };
-    }
-
-    public function runCreate(AmqpClient $client): void
+    public function runCreate(): void
     {
         if ($this->retry) {
             $arguments = [
@@ -62,37 +81,51 @@ class Queue implements SchemaBlueprintInterface
                 'x-dead-letter-routing-key' => $this->name,
                 'x-message-ttl' => $this->ttl,
             ];
-            $client->createQueue($this->name.'.retry', $arguments);
+            $this->getAmqpClient()->createQueue("$this->name.retry", $arguments);
         }
 
         if ($this->dlq) {
-            $client->createQueue($this->name.'.dlq');
+            $this->getAmqpClient()->createQueue("$this->name.dlq");
         }
 
         $arguments = ($this->retry)
             ? [
                 'x-dead-letter-exchange' => '',
-                'x-dead-letter-routing-key' => $this->name.'.retry',
+                'x-dead-letter-routing-key' => "$this->name.retry",
             ]
             : [];
 
-        $client->createQueue($this->name, $arguments);
+        $this->getAmqpClient()->createQueue($this->name, $arguments);
 
         if ($this->exchange) {
-            $client->bind($this->name, $this->exchange);
+            $this->getAmqpClient()->bind($this->name, $this->exchange, $this->routeKey ?: '');
         }
     }
 
-    public function runDelete(AmqpClient $client): void
+    public function runCreateIfNonExists(): void
+    {
+        if (! $this->getAmqpClient()->queueExists($this->name)) {
+            $this->runCreate();
+        }
+    }
+
+    public function runDelete(): void
     {
         if ($this->retry) {
-            $client->deleteQueue($this->name.'.retry');
+            $this->getAmqpClient()->deleteQueue("$this->name.retry");
         }
 
         if ($this->dlq) {
-            $client->deleteQueue($this->name.'.dlq');
+            $this->getAmqpClient()->deleteQueue("$this->name.dlq");
         }
 
-        $client->deleteQueue($this->name);
+        $this->getAmqpClient()->deleteQueue($this->name);
+    }
+
+    public function runDeleteIfExists(): void
+    {
+        if ($this->getAmqpClient()->queueExists($this->name)) {
+            $this->runDelete();
+        }
     }
 }
