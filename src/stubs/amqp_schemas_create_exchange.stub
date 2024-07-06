@@ -9,11 +9,11 @@ return new class extends SchemaMigration
 
     public function up(): void
     {
-        $this->createExchange(self::NAME);
+        $this->createExchangeIfNonExists(self::NAME);
     }
 
     public function down(): void
     {
-        $this->deleteExchange(self::NAME);
+        $this->deleteExchangeIfExists(self::NAME);
     }
 };
