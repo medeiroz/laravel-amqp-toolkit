@@ -2,16 +2,17 @@
 
 namespace Medeiroz\AmqpToolkit\SchemaMigration;
 
-use Exception;
 use Illuminate\Support\Arr;
-use Illuminate\Support\Facades\Http;
 use InvalidArgumentException;
-use Medeiroz\AmqpToolkit\AmqpClient;
+use Medeiroz\AmqpToolkit\RabbitmqApi;
 use Medeiroz\AmqpToolkit\SchemaMigration\Contracts\SchemaBlueprintInterface;
+use Medeiroz\AmqpToolkit\SchemaMigration\Contracts\WithRabbitmqApiInterface;
 use Medeiroz\AmqpToolkit\SchemaMigration\Shovel\ResourceInterface;
 
-class Shovel implements SchemaBlueprintInterface
+class Shovel implements SchemaBlueprintInterface, WithRabbitmqApiInterface
 {
+    private ?RabbitmqApi $rabbitmqApi = null;
+
     public function __construct(
         public string $action,
         public string $name,
@@ -21,17 +22,35 @@ class Shovel implements SchemaBlueprintInterface
         public string $acknowledgementMode = 'on-confirm', // on-confirm / on-publish / no-ack
     ) {}
 
-    public function run(AmqpClient $client): void
+    public function run(): void
     {
         match ($this->action) {
-            'create' => $this->runCreate($client),
-            'delete' => $this->runDelete($client),
-            default => throw new InvalidArgumentException("Invalid action: {$this->action}"),
+            'create' => $this->runCreate(),
+            'create-if-non-exists' => $this->runCreateIfNonExists(),
+            'delete' => $this->runDelete(),
+            'delete-if-exists' => $this->runDeleteIfExists(),
+            default => throw new InvalidArgumentException("Invalid action: $this->action"),
         };
     }
 
-    public function runCreate(AmqpClient $client): void
+    public function setRabbitmqApi(RabbitmqApi $rabbitmqApi): self
     {
+        $this->rabbitmqApi = $rabbitmqApi;
+
+        return $this;
+    }
+
+    public function getRabbitmqApi(): RabbitmqApi
+    {
+        return $this->rabbitmqApi;
+    }
+
+    public function runCreate(): void
+    {
+        if (! $this->source || ! $this->destination) {
+            throw new InvalidArgumentException('Shovel source and destination must be set');
+        }
+
         $source = $this->source->toArray();
         $source = Arr::prependKeysWith($source, 'src-');
 
@@ -41,7 +60,7 @@ class Shovel implements SchemaBlueprintInterface
         $payload = [
             'component' => 'shovel',
             'name' => $this->name,
-            'vhost' => $client->getSetting('vhost'),
+            'vhost' => $this->getRabbitmqApi()->connectionSettings['vhost'],
             'value' => [
                 'ack-mode' => $this->acknowledgementMode,
                 'reconnect-delay' => $this->reconnectDelaySeconds,
@@ -50,59 +69,32 @@ class Shovel implements SchemaBlueprintInterface
             ],
         ];
 
-        $payload = $this->filterAllowedProperties($payload);
+        $this->getRabbitmqApi()->createShovel($this->name, $payload);
+    }
 
-        $baseUrl = $client->getSetting('host').':'.$client->getSetting('api-port');
-
-        $response = Http::withBasicAuth($client->getSetting('user'), $client->getSetting('password'))
-            ->put("$baseUrl/api/parameters/shovel/%2F/{$this->name}", $payload);
-
-        if ($response->json('error')) {
-            throw new Exception("Error creating shovel {$this->name}: {$response->json('error')} : {$response->json('reason')}");
+    public function runCreateIfNonExists(): void
+    {
+        if (! $this->shovelExists($this->name)) {
+            $this->runCreate();
         }
     }
 
-    public function runDelete(AmqpClient $client): void
+    public function runDelete(): void
     {
-        $baseUrl = $client->getSetting('host').':'.$client->getSetting('api-port');
+        $this->getRabbitmqApi()->deleteShovel($this->name);
+    }
 
-        $response = Http::withBasicAuth($client->getSetting('user'), $client->getSetting('password'))
-            ->delete("$baseUrl/api/parameters/shovel/%2F/{$this->name}");
-
-        if ($response->json('error')) {
-            throw new Exception("Error creating shovel {$this->name}: {$response->json('error')} : {$response->json('reason')}");
+    public function runDeleteIfExists(): void
+    {
+        if ($this->shovelExists($this->name)) {
+            $this->runDelete();
         }
     }
 
-    private function filterAllowedProperties(array $payload): array
+    private function shovelExists(string $name): bool
     {
-        $whiteList = [
-            'component',
-            'vhost',
-            'name',
-            'value' => [
-                'ack-mode',
-                'reconnect-delay',
-                'src-uri',
-                'src-protocol',
-                'src-queue',
-                'src-prefetch-count',
-                'src-delete-after',
-                'src-address',
-                'src-exchange',
-                'src-exchange-key',
-                'dest-uri',
-                'dest-protocol',
-                'dest-queue',
-                'dest-add-forward-headers',
-                'dest-address',
-                'dest-exchange',
-                'dest-exchange-key',
-            ],
-        ];
+        $shovels = $this->getRabbitmqApi()->listShovels();
 
-        $payload['value'] = Arr::only($payload['value'], $whiteList['value']);
-
-        return $payload;
+        return Arr::first($shovels, fn (array $shovel) => $shovel['name'] === $name) !== null;
     }
 }
