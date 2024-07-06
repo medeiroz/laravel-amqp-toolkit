@@ -2,6 +2,7 @@
 
 namespace Medeiroz\AmqpToolkit;
 
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
 use Medeiroz\AmqpToolkit\Commands\AmqpConsumerCommand;
 use Medeiroz\AmqpToolkit\Commands\AmqpMigrateSchemaCommand;
