@@ -1,6 +1,7 @@
 <?php
 
 // config for Medeiroz/AmqpToolkit
+
 return [
     'schemas' => base_path('amqp-toolkit-schemas'),
     'table_name' => env('AMQP_TABLE_NAME', 'amqp_schemas'),
@@ -19,6 +20,13 @@ return [
      * Like as 'stack', 'single', 'daily' etc...
      */
     'logging-channel' => env('AMQP_LOG_CHANNEL', env('LOG_CHANNEL')),
+
+    /**
+     * The queues to be consumed by the consumer command without arguments.
+     */
+    'consumer-queues' => [
+        // 'payment-received.notifications' => \App\Listeners\PaymentReceivedNotificationsListener::class,
+    ],
 
     'connections' => [
         'rabbitmq' => [

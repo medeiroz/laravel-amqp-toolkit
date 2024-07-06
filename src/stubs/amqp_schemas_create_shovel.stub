@@ -11,7 +11,7 @@ return new class extends SchemaMigration
 
     public function up(): void
     {
-        $this->createShovel(
+        $this->createShovelIfNonExists(
             name: self::NAME,
             source: new Resource0dot9(
                 type: 'queue',
@@ -29,6 +29,6 @@ return new class extends SchemaMigration
 
     public function down(): void
     {
-        $this->deleteShovel(self::NAME);
+        $this->deleteShovelIfExists(self::NAME);
     }
 };

@@ -3,6 +3,8 @@
 namespace Medeiroz\AmqpToolkit\Commands;
 
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Str;
 use Medeiroz\AmqpToolkit\AmqpClient;
 use Medeiroz\AmqpToolkit\Events\AmqpReceivedMessageEvent;
 use Medeiroz\AmqpToolkit\Exceptions\MessageBodyEmptyException;
@@ -13,100 +15,178 @@ use Throwable;
 
 class AmqpConsumerCommand extends Command
 {
-    protected $signature = 'amqp:consumer {queue}';
+    protected $signature = 'amqp:consumer {queue?*}';
 
-    protected $description = 'Start a amqp consumer for a queue';
+    protected $description = 'Start a amqp consumer for a queues list
+        {queue: The queues to be consumed}
+        Accept a list of queues to be consumed.
+        When no queue is provided, the command will consume all queues configured in the consumer-queues key in the amqp-toolkit configuration file.
+    ';
 
-    public function __construct(protected AmqpClient $client)
+    public function __construct(private readonly AmqpClient $client)
     {
         parent::__construct();
     }
 
     public function handle(): void
     {
-        $this->components->info(sprintf('Starting consume queue %s ...', $this->getQueue()));
+        $this->validateHasQueuesToConsume();
+        $this->checkQueuesExists();
+        $this->analyseQueuesHasListeners();
+        $this->startConsumption();
+    }
+
+    public function startConsumption(): void
+    {
+        $this->components->info(
+            sprintf(
+                'Starting consume %s %s ...',
+                $this->getQueuesLabel(),
+                implode(', ', $this->getQueueNames()),
+            )
+        );
 
         try {
-            retry(
-                times: (int) $this->getClient()->getSetting('max-attempts'),
-                callback: fn () => $this->getClient()->consume(
-                    queue: $this->getQueue(),
-                    callback: fn (AMQPMessage $message) => $this->processCallback($message),
-                ),
-                sleepMilliseconds: function (int $attempts) {
-                    $this->components->warn(sprintf('Consumer failed. Retrying attempt %u ...', $attempts));
-
-                    return $attempts * 500;
-                },
-            );
+            $this->consumeQueues();
         } catch (Throwable $exception) {
-            $this->components->error('Consumer failed.');
+            $this->components->error("Consumer failed. {$exception->getMessage()}");
             throw $exception;
         }
-
         $this->components->info('Consumer finished.');
     }
 
-    public function processCallback(AMQPMessage $message): void
+    private function consumeQueues(): void
     {
-        try {
-            $body = $this->parseBody($message);
-            $this->process($body);
-            $this->accept($message);
-            $this->components->info(
-                sprintf(
-                    'Queue: %s | MessageID: %u | %s',
-                    $this->getQueue(),
-                    $message->getDeliveryTag(),
-                    'Message accepted.',
-                )
-            );
-        } catch (Throwable $exception) {
-            report($exception);
-            $this->reject($message, $exception);
-            $this->components->error(
-                sprintf(
-                    'Queue: %s | MessageID: %u | %s | Exception: %s',
-                    $this->getQueue(),
-                    $message->getDeliveryTag(),
-                    'Message rejected.',
-                    $exception->getMessage(),
-                )
-            );
+        retry(
+            times: $this->getMaxAttempts(),
+            callback: fn () => $this->client->consume(
+                queue: $this->getQueueNames(),
+                callback: fn (string $queue, AMQPMessage $message) => $this->processCallback($queue, $message),
+            ),
+            sleepMilliseconds: $this->retrySleepMilliseconds(),
+        );
+    }
+
+    private function retrySleepMilliseconds(): callable
+    {
+        return function (int $attempts, Throwable $exception) {
+            $this->components->warn(sprintf(
+                'Consumer failed. Retrying attempt %u. Exception: %s ...',
+                $attempts,
+                $exception->getMessage()
+            ));
+
+            return $attempts * 500;
+        };
+    }
+
+    private function getMaxAttempts(): int
+    {
+        return (int) config('amqp-toolkit.max-attempts', 10);
+    }
+
+    private function getQueues(): array
+    {
+        return config('amqp-toolkit.consumer-queues', []);
+    }
+
+    private function getQueueNames(): array
+    {
+        return $this->argument('queue')
+            ?: array_keys($this->getQueues());
+    }
+
+    public function getQueuesLabel(): string
+    {
+        return Str::plural('queue', count($this->getQueueNames()));
+    }
+
+    private function validateHasQueuesToConsume(): void
+    {
+        if (count($this->getQueueNames()) < 1) {
+            $this->components->error('No queues to consume.');
+            exit(1);
         }
     }
 
-    public function getQueue(): string
+    private function checkQueuesExists(): void
     {
-        return trim($this->argument('queue'));
-    }
-
-    public function process(array $body): void
-    {
-        $event = new AmqpReceivedMessageEvent(
-            queue: $this->getQueue(),
-            messageBody: $body,
+        $queueNonExists = array_filter(
+            $this->getQueueNames(),
+            fn (string $queue) => ! $this->client->queueExists($queue),
         );
 
-        event('amqp:'.$this->getQueue(), $event);
+        if (count($queueNonExists) > 0) {
+            $queuesLabel = Str::plural('Queue', count($queueNonExists));
+            $this->components->error(sprintf(
+                '%s [%s] not exists in AMQP server. Try run `php artisan amqp:migrate` to migrate queues',
+                $queuesLabel,
+                implode(', ', $queueNonExists),
+
+            ));
+            exit(1);
+        }
     }
 
-    public function getClient(): AmqpClient
+    private function analyseQueuesHasListeners(): void
     {
-        return $this->client;
+        array_map(function (string $queue) {
+            if (! Event::hasListeners("amqp:$queue")) {
+                $this->components->warn("Queue $queue has no listeners.");
+            }
+        }, $this->getQueueNames());
     }
 
-    public function accept(AMQPMessage $message): void
+    private function processCallback(string $queue, AMQPMessage $message): void
     {
-        $this->getClient()->accept($message);
+        try {
+            $body = $this->parseBody($message);
+            $this->process($queue, $body);
+            $this->accept($queue, $message);
+
+        } catch (Throwable $exception) {
+            $this->reject($queue, $message, $exception);
+            report($exception);
+        }
     }
 
-    public function reject(AMQPMessage $message, Throwable $exception): void
+    private function process(string $queue, array $body): void
     {
-        $this->getClient()->reject($message, $exception);
+        $event = new AmqpReceivedMessageEvent(queue: $queue, messageBody: $body);
+
+        event("amqp:$queue", $event);
     }
 
-    public function parseBody(AMQPMessage $message): array
+    private function accept(string $queue, AMQPMessage $message): void
+    {
+        $this->components->info(
+            sprintf(
+                'Queue: %s | MessageID: %u | %s',
+                $queue,
+                $message->getDeliveryTag(),
+                'Message accepted.',
+            )
+        );
+
+        $this->client->accept($message);
+    }
+
+    private function reject(string $queue, AMQPMessage $message, Throwable $exception): void
+    {
+        $this->components->error(
+            sprintf(
+                'Queue: %s | MessageID: %u | %s | Exception: %s',
+                $queue,
+                $message->getDeliveryTag(),
+                'Message rejected.',
+                $exception->getMessage(),
+            )
+        );
+
+        $this->client->reject($message, $exception);
+    }
+
+    private function parseBody(AMQPMessage $message): array
     {
         if (! $message->getBody()) {
             throw new MessageBodyEmptyException();
@@ -116,7 +196,7 @@ class AmqpConsumerCommand extends Command
             throw new MessageBodyUnjsonableException();
         }
         if (! is_array($body)) {
-            throw new MessageBodyUnparsebleException('Inválid body format. Should be an array or object.');
+            throw new MessageBodyUnparsebleException('Invalid body format. Should be an array or object.');
         }
 
         return $body;

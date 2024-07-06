@@ -2,6 +2,9 @@
 
 namespace Medeiroz\AmqpToolkit;
 
+use Illuminate\Support\Arr;
+use Illuminate\Support\Str;
+use Medeiroz\AmqpToolkit\Entities\QueueInfo;
 use Medeiroz\AmqpToolkit\Enums\ExchangesTypes;
 use PhpAmqpLib\Channel\AMQPChannel;
 use PhpAmqpLib\Connection\AbstractConnection;
@@ -23,6 +26,11 @@ class AmqpClient
         protected LoggerInterface $logger,
         protected array $settings,
     ) {}
+
+    public function __destruct()
+    {
+        $this->disconnect();
+    }
 
     public function connect(): void
     {
@@ -157,33 +165,51 @@ class AmqpClient
 
     public function publish(AMQPMessage $message, ?string $exchange = null, ?string $routeKey = null): void
     {
-        $this->connect();
+        retry(
+            times: (int) $this->getSetting('max-attempts'),
+            callback: function () use ($message, $exchange, $routeKey) {
+                $this->connect();
 
-        $this->channel->basic_publish(
-            msg: $message,
-            exchange: $exchange,
-            routing_key: $routeKey,
+                $this->channel->basic_publish(
+                    msg: $message,
+                    exchange: $exchange,
+                    routing_key: $routeKey,
+                );
+
+                $this->logger->debug("Message published to exchange {$exchange} or queue {$routeKey}".$message->getBody());
+            },
+            sleepMilliseconds: function (int $attempts) {
+                $this->reconnect();
+                $this->logger->alert(sprintf('Publisher failed. Retrying attempt %u ...', $attempts));
+
+                return $attempts * 500;
+            }
         );
-
-        $this->logger->debug("Message published to exchange {$exchange} or queue {$routeKey}".$message->getBody());
     }
 
-    public function consume(?string $queue, $callback): void
+    /**
+     * @param  string|string[]  $queue
+     */
+    public function consume(string|array $queue, $callback): void
     {
+        $queues = Arr::wrap($queue);
+
         $this->connect();
 
-        $this->logger->debug("Consuming queue: {$queue}");
+        $queueLabel = Str::plural('queue', count($queues));
 
+        $this->logger->debug(sprintf('Consuming %s: %s', $queueLabel, implode(', ', $queues)));
         $this->channel->basic_qos(prefetch_size: 0, prefetch_count: 1, a_global: false);
-        $this->channel->basic_consume(
-            queue: $queue,
-            callback: $callback,
-        );
+
+        foreach ($queues as $queue) {
+            $this->channel->basic_consume(queue: $queue, callback: fn (AMQPMessage $message) => $callback($queue, $message));
+        }
+
         while ($this->channel->is_consuming()) {
             $this->channel->wait();
         }
 
-        $this->logger->debug("Queue consume finished: {$queue}");
+        $this->logger->debug(sprintf('%s consume finished: %s', $queueLabel, implode(', ', $queues)));
     }
 
     public function accept(AMQPMessage $message): void
@@ -201,9 +227,11 @@ class AmqpClient
         $attempts = $message->get('application_headers')->getNativeData()['x-death'][0]['count'] ?? 0;
         $attempts++;
 
-        $this->logger->debug(
-            "Message rejected $attempts attempts"
-            .": {$exception->getMessage()}");
+        $this->logger->debug(sprintf(
+            'Message rejected %u attempts: %s',
+            $attempts,
+            $exception->getMessage(),
+        ));
 
         if ($attempts < $this->getSetting('max-attempts')) {
             $message->nack(requeue: false, multiple: false);
@@ -214,10 +242,52 @@ class AmqpClient
         $message->ack();
 
         try {
-            $this->channel->basic_publish($message, '', $message->get('routing_key').'.dlq');
-            $this->logger->debug('Message forward to DLQ: '.$message->getBody());
+            $dlq = $message->get('routing_key').'.dlq';
+            $this->channel->basic_publish($message, '', $dlq);
+            $this->logger->debug("Message forwarded to DLQ: $dlq");
+
         } catch (Throwable $e) {
-            $this->logger->error('Error forwarding message to DLQ: '.$e->getMessage());
+            $this->logger->error("Error forwarding message to DLQ: {$exception->getMessage()}");
+            report($e);
+        }
+    }
+
+    public function getQueueInfo(string $queue): QueueInfo
+    {
+        $this->connect();
+        [$queueName, $messageCount, $consumerCount] = $this->channel->queue_declare(queue: $queue, passive: true);
+
+        return new QueueInfo($queueName, $messageCount, $consumerCount);
+    }
+
+    public function queueExists(string $queue): bool
+    {
+        try {
+            $this->getQueueInfo($queue);
+
+            return true;
+
+        } catch (Throwable $exception) {
+            if (str_contains($exception->getMessage(), 'NOT_FOUND')) {
+                return false;
+            }
+            throw $exception;
+        }
+    }
+
+    public function exchangeExists(string $exchange): bool
+    {
+        try {
+            $this->connect();
+            $this->channel->exchange_declare(exchange: $exchange, type: ExchangesTypes::FANOUT->value, passive: true);
+
+            return true;
+
+        } catch (Throwable $exception) {
+            if (str_contains($exception->getMessage(), 'NOT_FOUND')) {
+                return false;
+            }
+            throw $exception;
         }
     }
 }

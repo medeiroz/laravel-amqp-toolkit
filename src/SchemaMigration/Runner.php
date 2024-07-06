@@ -5,18 +5,22 @@ namespace Medeiroz\AmqpToolkit\SchemaMigration;
 use Illuminate\Support\Collection;
 use Laravel\Prompts\Output\ConsoleOutput;
 use Medeiroz\AmqpToolkit\AmqpClient;
+use Medeiroz\AmqpToolkit\RabbitmqApi;
 use Medeiroz\AmqpToolkit\Repositories\SchemaDbRepository;
 use Medeiroz\AmqpToolkit\Repositories\SchemaFileRepository;
 use Medeiroz\AmqpToolkit\SchemaMigration\Contracts\SchemaBlueprintInterface;
+use Medeiroz\AmqpToolkit\SchemaMigration\Contracts\WithAmqpClientInterface;
+use Medeiroz\AmqpToolkit\SchemaMigration\Contracts\WithRabbitmqApiInterface;
 use Throwable;
 
 class Runner
 {
     public function __construct(
-        private AmqpClient $client,
-        private SchemaFileRepository $schemaFileRepository,
-        private SchemaDbRepository $schemaDbRepository,
-        private ConsoleOutput $output,
+        private readonly AmqpClient $amqpClient,
+        private readonly RabbitmqApi $rabbitmqApi,
+        private readonly SchemaFileRepository $schemaFileRepository,
+        private readonly SchemaDbRepository $schemaDbRepository,
+        private readonly ConsoleOutput $output,
 
     ) {}
 
@@ -83,10 +87,17 @@ class Runner
 
     protected function runStack(array $stack): void
     {
-        array_map(
-            fn (SchemaBlueprintInterface $item) => $item->run($this->client),
-            $stack
-        );
+        array_map(function (SchemaBlueprintInterface $item) {
+            if ($item instanceof WithAmqpClientInterface) {
+                $item->setAmqpClient($this->amqpClient);
+            }
+
+            if ($item instanceof WithRabbitmqApiInterface) {
+                $item->setRabbitmqApi($this->rabbitmqApi);
+            }
+
+            $item->run();
+        }, $stack);
     }
 
     protected function getFilesToMigrate(): Collection

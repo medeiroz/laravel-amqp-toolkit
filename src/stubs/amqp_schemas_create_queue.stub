@@ -9,7 +9,7 @@ return new class extends SchemaMigration
 
     public function up(): void
     {
-        $this->createQueue(self::NAME)
+        $this->createQueueIfNonExists(self::NAME)
             ->withRetry()
             ->withTtl(seconds: 5)
             ->withDlq();
@@ -17,8 +17,8 @@ return new class extends SchemaMigration
 
     public function down(): void
     {
-        $this->deleteQueue(self::NAME);
-        $this->deleteQueue(self::NAME . '.retry');
-        $this->deleteQueue(self::NAME . '.dlq');
+        $this->deleteQueueIfExists(self::NAME);
+        $this->deleteQueueIfExists(self::NAME . '.retry');
+        $this->deleteQueueIfExists(self::NAME . '.dlq');
     }
 };

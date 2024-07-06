@@ -19,7 +19,7 @@ uses()->group('amqp')->beforeEach(function () {
         'logging-channel' => 'stderr',
         'connections' => [
             'rabbitmq' => [
-                'host' => 'api-ms-indicacao-v2-rabbitmq',
+                'host' => 'localhost',
                 'port' => '5672',
                 'api-port' => '15672',
                 'user' => 'user',
@@ -31,6 +31,9 @@ uses()->group('amqp')->beforeEach(function () {
 
     $this->mockLogger = mock(LoggerInterface::class);
     $this->mockAmqpConnectionFactory = mock(AMQPConnectionFactory::class);
+
+    $this->mockLogger->shouldReceive('debug')->with('Disconnecting AMQP server...');
+    $this->mockLogger->shouldReceive('debug')->with('AMQP server disconnected');
 });
 
 it('can connect to AMQP server', function () {
@@ -43,6 +46,14 @@ it('can connect to AMQP server', function () {
     $mockConnection->shouldReceive('channel')
         ->once()
         ->andReturn($mockChannel);
+
+    $mockConnection->shouldReceive('close')
+        ->once()
+        ->andReturn();
+
+    $mockChannel->shouldReceive('close')
+        ->once()
+        ->andReturn();
 
     $this->mockAmqpConnectionFactory->shouldReceive('create')
         ->once()
@@ -67,7 +78,7 @@ it('can get setting', function () {
         $this->settings,
     );
 
-    expect($amqpClient->getSetting('host'))->toBe('api-ms-indicacao-v2-rabbitmq');
+    expect($amqpClient->getSetting('host'))->toBe('localhost');
     expect($amqpClient->getSetting('port'))->toBe('5672');
     expect($amqpClient->getSetting('api-port'))->toBe('15672');
     expect($amqpClient->getSetting('user'))->toBe('user');
@@ -126,11 +137,8 @@ it('can reconnect to AMQP server', function () {
         ->twice()
         ->andReturn($mockChannel);
 
-    $mockConnection->shouldReceive('close')
-        ->once();
-
-    $mockChannel->shouldReceive('close')
-        ->once();
+    $mockConnection->shouldReceive('close');
+    $mockChannel->shouldReceive('close');
 
     $this->mockAmqpConnectionFactory->shouldReceive('create')
         ->twice()
@@ -182,6 +190,9 @@ it('can create queue', function () {
         ->once()
         ->andReturn($mockChannel);
 
+    $mockConnection->shouldReceive('close');
+    $mockChannel->shouldReceive('close');
+
     $mockChannel->shouldReceive('queue_declare')
         ->once()
         ->with('test-queue', false, true, false, false, false, $this->isInstanceOf(AMQPTable::class));
@@ -211,6 +222,9 @@ it('can delete queue', function () {
     $mockConnection->shouldReceive('channel')
         ->once()
         ->andReturn($mockChannel);
+
+    $mockConnection->shouldReceive('close');
+    $mockChannel->shouldReceive('close');
 
     $mockChannel->shouldReceive('queue_delete')
         ->once()
@@ -242,6 +256,9 @@ it('can create exchange', function () {
         ->once()
         ->andReturn($mockChannel);
 
+    $mockConnection->shouldReceive('close');
+    $mockChannel->shouldReceive('close');
+
     $mockChannel->shouldReceive('exchange_declare')
         ->once()
         ->with('test-exchange', 'fanout', false, true, false);
@@ -272,6 +289,9 @@ it('can delete exchange', function () {
         ->once()
         ->andReturn($mockChannel);
 
+    $mockConnection->shouldReceive('close');
+    $mockChannel->shouldReceive('close');
+
     $mockChannel->shouldReceive('exchange_delete')
         ->once()
         ->with('test-exchange');
@@ -301,6 +321,9 @@ it('can bind queue to exchange', function () {
         ->once()
         ->andReturn($mockChannel);
 
+    $mockConnection->shouldReceive('close');
+    $mockChannel->shouldReceive('close');
+
     $mockChannel->shouldReceive('queue_bind')
         ->once()
         ->with('test-queue', 'test-exchange', '');
@@ -329,6 +352,9 @@ it('can unbind queue from exchange', function () {
     $mockConnection->shouldReceive('channel')
         ->once()
         ->andReturn($mockChannel);
+
+    $mockConnection->shouldReceive('close');
+    $mockChannel->shouldReceive('close');
 
     $mockChannel->shouldReceive('queue_unbind')
         ->once()
@@ -361,6 +387,9 @@ it('can publish message to exchange', function () {
         ->once()
         ->andReturn($mockChannel);
 
+    $mockConnection->shouldReceive('close');
+    $mockChannel->shouldReceive('close');
+
     $mockChannel->shouldReceive('basic_publish')
         ->once()
         ->with($message, 'test-exchange', '');
@@ -392,6 +421,9 @@ it('can publish message to queue', function () {
         ->once()
         ->andReturn($mockChannel);
 
+    $mockConnection->shouldReceive('close');
+    $mockChannel->shouldReceive('close');
+
     $mockChannel->shouldReceive('basic_publish')
         ->once()
         ->with($message, '', 'test-queue');
@@ -413,7 +445,7 @@ it('can consume message from queue', function () {
     $this->mockLogger->shouldReceive('debug')->with('Connecting AMQP server...');
     $this->mockLogger->shouldReceive('debug')->with('AMQP server connected');
     $this->mockLogger->shouldReceive('debug')->with('Consuming queue: test-queue');
-    $this->mockLogger->shouldReceive('debug')->with('Queue consume finished: test-queue');
+    $this->mockLogger->shouldReceive('debug')->with('queue consume finished: test-queue');
 
     $mockConnection = mock(AMQPStreamConnection::class);
     $mockChannel = mock(AMQPChannel::class);
@@ -421,6 +453,9 @@ it('can consume message from queue', function () {
     $mockConnection->shouldReceive('channel')
         ->once()
         ->andReturn($mockChannel);
+
+    $mockConnection->shouldReceive('close');
+    $mockChannel->shouldReceive('close');
 
     $mockChannel->shouldReceive('basic_qos')
         ->once()
@@ -506,6 +541,7 @@ it('can reject message - send to dead letter queue', function () {
     $this->mockLogger->shouldReceive('debug')->with('AMQP server connected');
     $this->mockLogger->shouldReceive('debug')->with('Message rejected 11 attempts: message of error');
     $this->mockLogger->shouldReceive('debug')->with('Message forward to DLQ: {"say": "hello"}');
+    $this->mockLogger->shouldReceive('error')->with('Error forwarding message to DLQ: message of error');
 
     $mockConnection = mock(AMQPStreamConnection::class);
     $mockChannel = mock(AMQPChannel::class);
@@ -513,6 +549,9 @@ it('can reject message - send to dead letter queue', function () {
     $mockConnection->shouldReceive('channel')
         ->once()
         ->andReturn($mockChannel);
+
+    $mockConnection->shouldReceive('close');
+    $mockChannel->shouldReceive('close');
 
     $this->mockAmqpConnectionFactory->shouldReceive('create')
         ->once()
@@ -536,11 +575,6 @@ it('can reject message - send to dead letter queue', function () {
     $message->shouldReceive('ack')
         ->once()
         ->with();
-
-    $message->shouldReceive('getBody')
-        ->once()
-        ->with()
-        ->andReturn('{"say": "hello"}');
 
     $mockChannel->shouldReceive('basic_publish')
         ->once()

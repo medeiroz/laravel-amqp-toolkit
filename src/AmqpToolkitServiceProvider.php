@@ -2,6 +2,7 @@
 
 namespace Medeiroz\AmqpToolkit;
 
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
 use Medeiroz\AmqpToolkit\Commands\AmqpConsumerCommand;
 use Medeiroz\AmqpToolkit\Commands\AmqpMigrateSchemaCommand;
@@ -43,6 +44,13 @@ class AmqpToolkitServiceProvider extends PackageServiceProvider
             fn ($app) => new SchemaDbRepository($app['db'], $app['config']['amqp-toolkit']['table_name']),
         );
 
+        $this->app->singleton(RabbitmqApi::class, function ($app) {
+            $connectionName = $app['config']['amqp-toolkit']['connection'];
+            $connection = $app['config']['amqp-toolkit']['connections'][$connectionName];
+
+            return new RabbitmqApi($connection);
+        });
+
         $this->app->bind(
             AmqpClient::class,
             fn ($app) => new AmqpClient(
@@ -51,5 +59,17 @@ class AmqpToolkitServiceProvider extends PackageServiceProvider
                 settings: $app['config']['amqp-toolkit'],
             ),
         );
+    }
+
+    public function packageBooted()
+    {
+        $queues = $this->app['config']['amqp-toolkit']['consumer-queues'] ?? [];
+
+        foreach ($queues as $queue => $listener) {
+            Event::listen(
+                sprintf('amqp:%s', $queue),
+                $listener,
+            );
+        }
     }
 }
