@@ -15,7 +15,7 @@ class Bind implements SchemaBlueprintInterface, WithAmqpClientInterface
         public string $action,
         public string $queue,
         public string $exchange,
-        public string $routingKey = '',
+        public ?string $routingKey = null,
     ) {}
 
     public function run(): void
