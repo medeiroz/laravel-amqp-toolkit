@@ -228,7 +228,8 @@ class AmqpClient
 
         try {
             $attempts = $message->get('application_headers')->getNativeData()['x-death'][0]['count'] ?? 0;
-        } catch (Throwable) { }
+        } catch (Throwable) {
+        }
 
         $attempts++;
 
