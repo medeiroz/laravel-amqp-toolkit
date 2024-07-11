@@ -75,16 +75,16 @@ class AmqpClient
 
     public function disconnect(): void
     {
-        $this->logger->debug('Disconnecting AMQP server...');
-
         if ($this->channel && $this->connection) {
+            $this->logger->debug('Disconnecting AMQP server...');
+
             $this->channel->close();
             $this->connection->close();
             $this->channel = null;
             $this->connection = null;
-        }
 
-        $this->logger->debug('AMQP server disconnected');
+            $this->logger->debug('AMQP server disconnected');
+        }
     }
 
     public function reconnect(): void
@@ -224,7 +224,13 @@ class AmqpClient
             return;
         }
 
-        $attempts = $message->get('application_headers')->getNativeData()['x-death'][0]['count'] ?? 0;
+        $attempts = 0;
+
+        try {
+            $attempts = $message->get('application_headers')->getNativeData()['x-death'][0]['count'] ?? 0;
+        } catch (Throwable) {
+        }
+
         $attempts++;
 
         $this->logger->debug(sprintf(
