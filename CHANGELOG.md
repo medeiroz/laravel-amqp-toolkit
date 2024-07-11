@@ -4,6 +4,14 @@ All notable changes to `laravel-amqp-toolkit` will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
+## 1.1.2 - 2024-07-11
+
+### What's Changed
+
+* Added try catch to get attempt counter by @medeiroz in https://github.com/medeiroz/laravel-amqp-toolkit/pull/14
+
+**Full Changelog**: https://github.com/medeiroz/laravel-amqp-toolkit/compare/1.1.1...1.1.2
+
 ## 1.1.1 - 2024-07-11
 
 ### What's Changed
